@@ -104,6 +104,7 @@ export default function AdminRequestsPage() {
   const [customEmail, setCustomEmail] = useState('');
   const [customPassword, setCustomPassword] = useState('');
   const [deleteRequestTarget, setDeleteRequestTarget] = useState<RestaurantRequest | null>(null);
+  const [keyMissing, setKeyMissing] = useState(false);
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -123,6 +124,14 @@ export default function AdminRequestsPage() {
 
   useEffect(() => {
     loadRequests();
+    
+    // Check if service key is set
+    fetch('/api/admin/check-config')
+      .then((res) => res.json())
+      .then((data) => {
+        setKeyMissing(!data.serviceRoleKeySet);
+      })
+      .catch(() => {});
   }, [loadRequests]);
 
   const filtered = requests.filter((r) => {
@@ -249,6 +258,22 @@ export default function AdminRequestsPage() {
         <h1 className="text-2xl font-bold text-slate-900">Igénylések</h1>
         <p className="text-slate-500 mt-1">Beérkező étterem-csatlakozási igénylések kezelése</p>
       </div>
+
+      {keyMissing && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 flex gap-3 text-sm">
+          <XCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold text-amber-900">Figyelem: Hiányzó adminisztrátori jogosultság (SUPABASE_SERVICE_ROLE_KEY)!</p>
+            <p className="text-amber-700 leading-relaxed">
+              A <code className="bg-amber-100 font-mono text-xs px-1 rounded text-red-700">SUPABASE_SERVICE_ROLE_KEY</code> nincs beállítva. 
+              Emiatt a <strong>"Jóváhagyás"</strong> gombra kattintva a tagok regisztrációja és jelszó generálása sikertelen lesz.
+            </p>
+            <p className="text-amber-800 font-semibold mt-1">
+              Megoldás: Lépj az AI Studio-ban a <strong>Settings (Fogaskerék) → Secrets</strong> menühöz, és add hozzá: <span className="font-mono bg-white border border-amber-300 px-1.5 py-0.5 rounded text-[11px] select-all">SUPABASE_SERVICE_ROLE_KEY</span> változót (és illeszd be a Supabase Service Role kulcsodat).
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">

@@ -48,6 +48,7 @@ interface TenantWithSub extends Tenant {
 
 export default function AdminPartnersPage() {
   const [partners, setPartners] = useState<TenantWithSub[]>([]);
+  const [partnerRevenues, setPartnerRevenues] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [toggleTarget, setToggleTarget] = useState<Tenant | null>(null);
@@ -61,15 +62,23 @@ export default function AdminPartnersPage() {
 
   const loadPartners = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('tenants')
-      .select('*, subscriptions(*)')
-      .order('created_at', { ascending: false });
+    
+    const [tenantsRes, ordersRes] = await Promise.all([
+      supabase.from('tenants').select('*, subscriptions(*)').order('created_at', { ascending: false }),
+      supabase.from('orders').select('tenant_id, total')
+    ]);
 
-    if (error) {
-      toast.error('Hiba törént a partnerek lekérdezésekor: ' + error.message);
+    if (tenantsRes.error) {
+      toast.error('Hiba történt a partnerek lekérdezésekor: ' + tenantsRes.error.message);
     } else {
-      setPartners(data || []);
+      setPartners(tenantsRes.data || []);
+      
+      const revMap: Record<string, number> = {};
+      (ordersRes.data || []).forEach((order) => {
+        const tid = order.tenant_id;
+        revMap[tid] = (revMap[tid] || 0) + Number(order.total || 0);
+      });
+      setPartnerRevenues(revMap);
     }
     setLoading(false);
   }, []);
@@ -311,6 +320,11 @@ export default function AdminPartnersPage() {
                     <div className="flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5 shrink-0" />
                       <span>Csatlakozott: {new Date(partner.created_at).toLocaleDateString('hu-HU')}</span>
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between font-semibold text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                      <span className="text-xs uppercase tracking-wider">Összesített bevétel:</span>
+                      <span className="text-sm font-extrabold">{(partnerRevenues[partner.id] || 0).toLocaleString('hu-HU')} Ft</span>
                     </div>
 
                     {/* Subscription info instead of trial keyword */}

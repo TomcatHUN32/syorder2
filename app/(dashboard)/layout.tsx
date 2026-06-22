@@ -19,6 +19,7 @@ import {
   Menu,
   Bell,
   UtensilsCrossed,
+  Wallet,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { SyorderLogoMark } from '@/components/syorder-logo';
@@ -28,6 +29,7 @@ import { toast } from 'sonner';
 const navItems = [
   { href: '/dashboard', label: 'Irányítópult', icon: LayoutDashboard },
   { href: '/dashboard/orders', label: 'Rendelések', icon: ShoppingBag },
+  { href: '/dashboard/register', label: 'Nyitás & Zárás', icon: Wallet },
   { href: '/dashboard/menu', label: 'Termékek', icon: UtensilsCrossed },
   { href: '/dashboard/inventory', label: 'Készlet (Összetevők)', icon: Package },
   { href: '/dashboard/customers', label: 'Ügyfelek', icon: Users },

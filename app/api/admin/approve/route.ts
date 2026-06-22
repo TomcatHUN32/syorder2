@@ -26,9 +26,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'requestId és subdomain kötelező' }, { status: 400, headers: corsHeaders });
     }
 
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceKey) {
+      return NextResponse.json(
+        { 
+          error: 'Hiányzó SUPABASE_SERVICE_ROLE_KEY! Kérjük, állítsd be ezt a kulcsot a Secrets-ben az AI Studio beállításaiban, hogy a rendszer létrehozhassa az új felhasználókat és éttermeket.' 
+        }, 
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
     const adminClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      serviceKey,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 

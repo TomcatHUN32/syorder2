@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -21,6 +22,7 @@ import {
   Users,
   UtensilsCrossed,
   Calendar,
+  Printer,
 } from 'lucide-react';
 import {
   LineChart,
@@ -170,17 +172,19 @@ export default function AnalyticsPage() {
       // Category distribution
       const catStats = new Map<string, number>();
       orders.forEach((order) => {
-        (order.order_items || []).forEach((item: { menu_item?: { category_id?: string } | null; total_price?: number }) => {
-          if (item.menu_item?.category_id && item.total_price) {
-            const existing = catStats.get(item.menu_item.category_id) || 0;
-            catStats.set(item.menu_item.category_id, existing + Number(item.total_price));
+        (order.order_items || []).forEach((item: { category?: { name: string } | null; menu_item?: { category_id?: string } | null; total_price?: number }) => {
+          const catName = item.category?.name || 'Egyéb';
+          if (item.total_price) {
+            const existing = catStats.get(catName) || 0;
+            catStats.set(catName, existing + Number(item.total_price));
           }
         });
       });
 
       const categoriesArray = Array.from(catStats.entries())
-        .map(([_, value]) => ({ name: 'Category', value }))
-        .slice(0, 5);
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 7);
 
       if (categoriesArray.length === 0) {
         setCategoryData([{ name: 'No data', value: 1 }]);
@@ -192,6 +196,186 @@ export default function AnalyticsPage() {
       console.error('Error loading analytics:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function handlePrintReport() {
+    const rangeText = dateRange === '7' ? 'Elmúlt 7 nap' : dateRange === '14' ? 'Elmúlt 14 nap' : dateRange === '30' ? 'Elmúlt 30 nap' : 'Elmúlt 90 nap';
+    const topItemsRows = topItems.map((item, idx) => `
+      <tr>
+        <td style="padding: 8px 6px; border-bottom: 1px solid #e2e8f0; text-align: left;">${idx + 1}. ${item.name}</td>
+        <td style="padding: 8px 6px; border-bottom: 1px solid #e2e8f0; text-align: center;">${item.orders} db</td>
+        <td style="padding: 8px 6px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: #0f172a;">${item.revenue.toLocaleString('hu-HU')} Ft</td>
+      </tr>
+    `).join('');
+
+    const categoryRows = categoryData.map(cat => `
+      <tr>
+        <td style="padding: 8px 6px; border-bottom: 1px solid #e2e8f0; text-align: left;">${cat.name}</td>
+        <td style="padding: 8px 6px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold; color: #0f172a;">${cat.value.toLocaleString('hu-HU')} Ft</td>
+      </tr>
+    `).join('');
+
+    const printWindow = window.open('', '', 'width=900,height=900,toolbar=0,scrollbars=1,status=0');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Üzleti Riport - SYORDER</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                margin: 40px;
+                color: #1e293b;
+                background: #fff;
+                line-height: 1.5;
+              }
+              .header {
+                border-bottom: 3px solid #0f172a;
+                padding-bottom: 15px;
+                margin-bottom: 30px;
+              }
+              .header h1 {
+                margin: 0;
+                font-size: 28px;
+                font-weight: 800;
+                color: #0f172a;
+                text-transform: uppercase;
+                letter-spacing: -0.5px;
+              }
+              .header p {
+                margin: 5px 0 0;
+                color: #64748b;
+                font-size: 14px;
+              }
+              .kpi-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 15px;
+                margin-bottom: 40px;
+              }
+              .kpi-card {
+                border: 1px solid #cbd5e1;
+                border-radius: 12px;
+                padding: 16px;
+                background: #f8fafc;
+                text-align: left;
+              }
+              .kpi-label {
+                font-size: 11px;
+                text-transform: uppercase;
+                color: #64748b;
+                font-weight: 700;
+                letter-spacing: 0.5px;
+              }
+              .kpi-value {
+                font-size: 20px;
+                font-weight: 800;
+                color: #0f172a;
+                margin-top: 6px;
+              }
+              .section-title {
+                font-size: 16px;
+                font-weight: 800;
+                margin: 35px 0 15px;
+                border-bottom: 2px solid #334155;
+                padding-bottom: 6px;
+                color: #0f172a;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+                margin-bottom: 20px;
+              }
+              th {
+                text-align: left;
+                padding: 10px 8px;
+                background: #f1f5f9;
+                color: #475569;
+                font-weight: 700;
+                text-transform: uppercase;
+                font-size: 11px;
+                letter-spacing: 0.5px;
+                border-bottom: 2px solid #e2e8f0;
+              }
+              @media print {
+                body { margin: 20px; }
+                .kpi-grid { gap: 10px; }
+                .kpi-card { border: 1px solid #94a3b8; background: #fff !important; }
+                th { background: #e2e8f0 !important; color: #000 !important; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Üzleti Jelentés & Riport</h1>
+              <p>Időszak: <strong>${rangeText}</strong> &middot; Generálva: ${new Date().toLocaleDateString('hu-HU')} ${new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}</p>
+            </div>
+
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <div class="kpi-label">Összes bevétel</div>
+                <div class="kpi-value">${stats.totalRevenue.toLocaleString('hu-HU')} Ft</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Rendelések száma</div>
+                <div class="kpi-value">${stats.totalOrders} db</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Átlagos rendelésérték</div>
+                <div class="kpi-value">${Math.round(stats.avgOrderValue).toLocaleString('hu-HU')} Ft</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label">Eladott tételek</div>
+                <div class="kpi-value">${topItems.reduce((sum, item) => sum + item.orders, 0)} db</div>
+              </div>
+            </div>
+
+            <div class="section-title">Legsikeresebb termékek eladási adatai</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 50%; text-align: left;">Termék név</th>
+                  <th style="text-align: center; width: 25%;">Eladott mennyiség</th>
+                  <th style="text-align: right; width: 25%;">Összesített bevétel</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${topItemsRows || '<tr><td colspan="3" style="text-align:center; padding:20px; color:#64748b;">Nincs eladási adat ebben az időszakban.</td></tr>'}
+              </tbody>
+            </table>
+
+            <div class="section-title">Bevétel kategóriánkénti megoszlása</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 60%; text-align: left;">Kategória megnevezése</th>
+                  <th style="text-align: right; width: 40%;">Bevétel</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${categoryRows || '<tr><td colspan="2" style="text-align:center; padding:20px; color:#64748b;">Nincs kategória adat.</td></tr>'}
+              </tbody>
+            </table>
+
+            <div style="margin-top: 60px; display: flex; justify-content: space-between; font-size: 12px; color: #475569; border-top: 1px dashed #cbd5e1; padding-top: 15px;">
+              <span>SYORDER Rendszer &middot; Forgalmi Jelentési Bizonylat</span>
+              <span style="font-weight: 600;">Elnök / Üzletvezető aláírása: _______________________</span>
+            </div>
+
+            <script>
+              window.onload = function() {
+                window.print();
+                window.close();
+              }
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
     }
   }
 
@@ -208,23 +392,34 @@ export default function AnalyticsPage() {
       {/* Fejléc */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Analitika</h1>
-          <p className="text-muted-foreground">
-            Kövesd nyomon az étterem teljesítményét és trendjeit
+          <h1 className="text-3xl font-bold font-sans tracking-tight text-slate-900">Analitika és Jelentések</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Kövesd nyomon az étterem forgalmát, legnépszerűbb ételeit és üzleti trendjeit
           </p>
         </div>
-        <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger className="w-40">
-            <Calendar className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Elmúlt 7 nap</SelectItem>
-            <SelectItem value="14">Elmúlt 14 nap</SelectItem>
-            <SelectItem value="30">Elmúlt 30 nap</SelectItem>
-            <SelectItem value="90">Elmúlt 90 nap</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button
+            onClick={handlePrintReport}
+            variant="outline"
+            className="gap-2 border-slate-200 hover:bg-slate-50 text-slate-700 font-medium"
+          >
+            <Printer className="h-4 w-4" />
+            Jelentés Nyomtatása / PDF
+          </Button>
+
+          <Select value={dateRange} onValueChange={setDateRange}>
+            <SelectTrigger className="w-40 bg-white">
+              <Calendar className="h-4 w-4 mr-2 text-slate-400" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7">Elmúlt 7 nap</SelectItem>
+              <SelectItem value="14">Elmúlt 14 nap</SelectItem>
+              <SelectItem value="30">Elmúlt 30 nap</SelectItem>
+              <SelectItem value="90">Elmúlt 90 nap</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Statisztika kártyák */}
