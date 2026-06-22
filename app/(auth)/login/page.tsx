@@ -47,19 +47,29 @@ export default function LoginPage() {
 
     toast.success('Üdvözlünk vissza!');
 
-    // Superadmin check → redirect to admin panel
-    const { data: userData } = await supabase
-      .from('users')
-      .select('is_superadmin')
-      .eq('id', data.user.id)
-      .maybeSingle();
+    try {
+      // Superadmin check → redirect to admin panel
+      const { data: userData } = await supabase
+        .from('users')
+        .select('is_superadmin')
+        .eq('id', data.user.id)
+        .maybeSingle();
 
-    if (userData?.is_superadmin) {
-      router.push('/admin');
-    } else {
+      if (userData?.is_superadmin) {
+        router.push('/admin');
+      } else {
+        router.push(redirect);
+      }
+    } catch (err) {
+      console.error('Superadmin check fell back:', err);
       router.push(redirect);
+    } finally {
+      router.refresh();
+      // Ensure loading state gets reset if the browser stays on the page
+      setTimeout(() => {
+        setLoading(false);
+      }, 1000);
     }
-    router.refresh();
   }
 
   return (

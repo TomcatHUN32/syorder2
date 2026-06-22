@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
+import { SupabaseConfigWarning } from '@/components/supabase-config-warning';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -29,6 +30,7 @@ export default function RootLayout({
   return (
     <html lang="hu" suppressHydrationWarning>
       <body className={inter.className}>
+        <SupabaseConfigWarning />
         {children}
         <Toaster position="top-right" />
       </body>

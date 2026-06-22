@@ -20,7 +20,7 @@ export async function OPTIONS() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { requestId, subdomain } = await request.json();
+    const { requestId, subdomain, customEmail, customPassword } = await request.json();
 
     if (!requestId || !subdomain) {
       return NextResponse.json({ error: 'requestId és subdomain kötelező' }, { status: 400, headers: corsHeaders });
@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Igénylés nem található' }, { status: 404, headers: corsHeaders });
     }
 
-    const posEmail = `${subdomain}@pos2.syorder.hu`;
-    const posPassword = generatePassword(12);
+    const posEmail = customEmail || `${subdomain}@pos2.syorder.hu`;
+    const posPassword = customPassword || generatePassword(12);
 
     // 1. Create tenant
     const { data: tenant, error: tenantErr } = await adminClient

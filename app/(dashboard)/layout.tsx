@@ -28,11 +28,11 @@ import { toast } from 'sonner';
 const navItems = [
   { href: '/dashboard', label: 'Irányítópult', icon: LayoutDashboard },
   { href: '/dashboard/orders', label: 'Rendelések', icon: ShoppingBag },
-  { href: '/dashboard/menu', label: 'Menü', icon: UtensilsCrossed },
-  { href: '/dashboard/inventory', label: 'Készlet', icon: Package },
+  { href: '/dashboard/menu', label: 'Termékek', icon: UtensilsCrossed },
+  { href: '/dashboard/inventory', label: 'Készlet (Összetevők)', icon: Package },
   { href: '/dashboard/customers', label: 'Ügyfelek', icon: Users },
-  { href: '/dashboard/analytics', label: 'Analitika', icon: BarChart3 },
-  { href: '/dashboard/settings', label: 'Beállítások', icon: Settings },
+  { href: '/dashboard/analytics', label: 'Statisztika', icon: BarChart3 },
+  { href: '/dashboard/settings', label: 'Nyitvatartás & Városok', icon: Settings },
 ];
 
 interface DashboardLayoutProps {

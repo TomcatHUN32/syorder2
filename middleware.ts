@@ -24,8 +24,17 @@ export function middleware(request: NextRequest) {
 
   if (subdomainParam) {
     subdomain = subdomainParam;
-  } else if (parts.length >= 3 && parts[0] !== 'www') {
-    subdomain = parts[0];
+  } else {
+    const hostWithoutPortLower = hostWithoutPort.toLowerCase();
+    const isSpecialHost =
+      hostWithoutPortLower === 'localhost' ||
+      hostWithoutPortLower === '127.0.0.1' ||
+      hostWithoutPortLower.endsWith('.local') ||
+      hostWithoutPortLower.endsWith('.run.app');
+
+    if (!isSpecialHost && parts.length >= 3 && parts[0] !== 'www') {
+      subdomain = parts[0];
+    }
   }
 
   const isAdminSubdomain = subdomain === 'admin';

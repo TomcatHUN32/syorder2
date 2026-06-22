@@ -100,6 +100,8 @@ export default function AdminRequestsPage() {
   const [rejectNotes, setRejectNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
+  const [customEmail, setCustomEmail] = useState('');
+  const [customPassword, setCustomPassword] = useState('');
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -139,8 +141,24 @@ export default function AdminRequestsPage() {
 
   function openApprove(req: RestaurantRequest) {
     setSelected(req);
-    setSubdomainInput(req.subdomain || req.business_name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9-]/g, ''));
+    const sub = req.subdomain || req.business_name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9-]/g, '');
+    setSubdomainInput(sub);
+    setCustomEmail(`${sub}@pos2.syorder.hu`);
+    
+    // Generate a random password for editing
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let generatedPass = '';
+    for (let i = 0; i < 10; i++) {
+      generatedPass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCustomPassword(generatedPass);
     setApproveDialogOpen(true);
+  }
+
+  function handleSubdomainChange(newSub: string) {
+    const sanitized = newSub.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    setSubdomainInput(sanitized);
+    setCustomEmail(`${sanitized}@pos2.syorder.hu`);
   }
 
   function openReject(req: RestaurantRequest) {
@@ -157,7 +175,12 @@ export default function AdminRequestsPage() {
       const res = await fetch('/api/admin/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId: selected.id, subdomain: subdomainInput.trim() }),
+        body: JSON.stringify({
+          requestId: selected.id,
+          subdomain: subdomainInput.trim(),
+          customEmail: customEmail.trim(),
+          customPassword: customPassword.trim(),
+        }),
       });
 
       const data = await res.json();
@@ -175,7 +198,7 @@ export default function AdminRequestsPage() {
       });
       setApproveDialogOpen(false);
       setCredentialsOpen(true);
-      toast.success(`${selected.business_name} jóváhagyva — belépési adatok generálva`);
+      toast.success(`${selected.business_name} jóváhagyva — belépési adatok rögzítve`);
       loadRequests();
     } finally {
       setSaving(false);
@@ -428,36 +451,70 @@ export default function AdminRequestsPage() {
 
       {/* Approve Dialog */}
       <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Igénylés Jóváhagyása</DialogTitle>
             <DialogDescription>
-              Állítsd be az aldomain nevet a(z) {selected?.business_name} számára. A jóváhagyás után a rendszer automatikusan generál belépési adatokat a pos2.syorder.hu-hoz.
+              Állítsd be az aldomain nevet és a POS belépési adatokat a(z) {selected?.business_name} számára.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <Label htmlFor="subdomain">Aldomain</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="subdomain"
-                value={subdomainInput}
-                onChange={(e) => setSubdomainInput(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                placeholder="pl. pizzapalace"
-              />
-              <span className="text-slate-500 text-sm whitespace-nowrap">.syorder.hu</span>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="subdomain" className="font-semibold text-slate-800">Aldomain név</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="subdomain"
+                  value={subdomainInput}
+                  onChange={(e) => handleSubdomainChange(e.target.value)}
+                  placeholder="pl. pizzapalace"
+                  className="font-medium"
+                />
+                <span className="text-slate-500 text-sm font-semibold whitespace-nowrap bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-lg">.syorder.hu</span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Csak kisbetűk, számok és kötőjel. Ezt a nevet használja majd az étterem a saját aldomainjén.
+              </p>
             </div>
-            <p className="text-xs text-slate-400">
-              Csak kisbetűk, számok és kötőjel. A belépési email: <span className="font-mono">{subdomainInput || 'aldomain'}@pos2.syorder.hu</span>
-            </p>
+
+            <div className="space-y-1.5 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+              <span className="text-xs font-bold text-emerald-800 tracking-wider uppercase block mb-2">POS2 Hozzáférési adatok kézi megadása</span>
+              
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="customEmail" className="text-xs text-slate-600">Bejelentkezési E-mail cím</Label>
+                  <Input
+                    id="customEmail"
+                    value={customEmail}
+                    onChange={(e) => setCustomEmail(e.target.value)}
+                    placeholder="sajat@pos2.syorder.hu"
+                    className="font-mono text-xs text-slate-800 bg-white"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="customPassword" className="text-xs text-slate-600">Bejelentkezési Jelszó</Label>
+                  <Input
+                    id="customPassword"
+                    value={customPassword}
+                    onChange={(e) => setCustomPassword(e.target.value)}
+                    placeholder="jelszot_itt_irhatsz"
+                    className="font-mono text-xs text-slate-800 bg-white"
+                  />
+                  <p className="text-[10px] text-amber-600 font-medium">
+                    Tipp: Itt tetszőleges e-mailt és jelszót megadhatsz a POS2 belépéshez, vagy hagyhatod az automatikusan felajánlottat.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setApproveDialogOpen(false)}>Mégse</Button>
             <Button
               onClick={handleApprove}
-              disabled={saving || !subdomainInput.trim()}
+              disabled={saving || !subdomainInput.trim() || !customEmail.trim() || !customPassword.trim()}
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              {saving ? 'Feldolgozás...' : 'Jóváhagyás & Hozzáférés generálása'}
+              {saving ? 'Feldolgozás...' : 'Jóváhagyás & Mentés'}
             </Button>
           </DialogFooter>
         </DialogContent>
