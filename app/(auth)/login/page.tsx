@@ -48,6 +48,35 @@ export default function LoginPage() {
     toast.success('Üdvözlünk vissza!');
 
     try {
+      // If the email matches the superadmin email, ensure we set is_superadmin to true
+      const userEmail = email.toLowerCase().trim();
+      if (userEmail === 'szabolcssr8@gmail.com') {
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id, is_superadmin')
+          .eq('id', data.user.id)
+          .maybeSingle();
+
+        if (existingUser) {
+          if (!existingUser.is_superadmin) {
+            await supabase
+              .from('users')
+              .update({ is_superadmin: true, role: 'admin' })
+              .eq('id', data.user.id);
+          }
+        } else {
+          await supabase
+            .from('users')
+            .insert({
+              id: data.user.id,
+              is_superadmin: true,
+              role: 'admin',
+              full_name: 'Szabolcs Admin',
+              email: userEmail
+            });
+        }
+      }
+
       // Superadmin check → redirect to admin panel
       const { data: userData } = await supabase
         .from('users')
@@ -55,7 +84,7 @@ export default function LoginPage() {
         .eq('id', data.user.id)
         .maybeSingle();
 
-      if (userData?.is_superadmin) {
+      if (userData?.is_superadmin || userEmail === 'szabolcssr8@gmail.com') {
         router.push('/admin');
       } else {
         router.push(redirect);

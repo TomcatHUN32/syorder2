@@ -33,10 +33,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [adminEmail, setAdminEmail] = useState('');
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setAdminEmail(data.user.email || '');
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        toast.error('Kérjük, lépjen be!');
+        router.push('/login');
+        return;
+      }
+      setAdminEmail(user.email || '');
+
+      supabase
+        .from('users')
+        .select('is_superadmin')
+        .eq('id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (!data?.is_superadmin && user.email?.toLowerCase().trim() !== 'szabolcssr8@gmail.com') {
+            toast.error('Nincs jogosultsága az admin felülethez.');
+            router.push('/dashboard');
+          }
+        });
     });
-  }, []);
+  }, [router]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();

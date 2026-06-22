@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -43,6 +43,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase
+          .from('users')
+          .select('is_superadmin')
+          .eq('id', user.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.is_superadmin) {
+              router.push('/admin');
+            }
+          });
+      }
+    });
+  }, [router]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
