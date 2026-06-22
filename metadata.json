@@ -1,0 +1,6 @@
+{
+  "name": "SYORDER",
+  "description": "Premium multi-tenant restaurant ordering and management platform (Étteremkezelő Platform).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
