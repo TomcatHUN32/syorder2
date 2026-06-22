@@ -325,7 +325,15 @@ export default function AdminPartnersPage() {
                       )}
                       <div>
                         <p className="font-semibold text-slate-900 leading-tight">{partner.name}</p>
-                        <p className="text-xs text-slate-400 font-mono">{partner.slug}.syorder.hu</p>
+                        <a
+                          href={`/restaurant/${partner.slug}`}
+                          target="_blank"
+                          title="Megtekintés az előnézeti környezetben"
+                          className="text-xs text-rose-600 font-mono hover:underline hover:text-blue-600 flex items-center gap-1 cursor-pointer"
+                        >
+                          {partner.slug}.syorder.hu
+                          <ExternalLink className="h-3 w-3 inline" />
+                        </a>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">

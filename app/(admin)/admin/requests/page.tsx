@@ -347,7 +347,14 @@ export default function AdminRequestsPage() {
                         <p className="font-semibold text-slate-900">{req.business_name}</p>
                         <Badge variant={status.variant}>{status.label}</Badge>
                         {req.subdomain && (
-                          <span className="text-xs text-slate-400 font-mono">{req.subdomain}.syorder.hu</span>
+                          <a
+                            href={`/restaurant/${req.subdomain}`}
+                            target="_blank"
+                            title="Megtekintés az előnézeti környezetben"
+                            className="text-xs text-rose-600 font-mono hover:underline hover:text-blue-600 cursor-pointer"
+                          >
+                            {req.subdomain}.syorder.hu
+                          </a>
                         )}
                       </div>
                       <p className="text-sm text-slate-500 mt-0.5">
@@ -493,7 +500,14 @@ export default function AdminRequestsPage() {
               {selected.subdomain && (
                 <div className="bg-emerald-50 rounded-lg p-3">
                   <p className="text-xs text-emerald-700 font-medium mb-1">Kiosztott aldomain</p>
-                  <p className="text-sm font-mono text-emerald-900">{selected.subdomain}.syorder.hu</p>
+                  <a
+                    href={`/restaurant/${selected.subdomain}`}
+                    target="_blank"
+                    title="Megtekintés az előnézeti környezetben"
+                    className="text-sm font-mono text-emerald-900 hover:underline hover:text-blue-700 cursor-pointer block"
+                  >
+                    {selected.subdomain}.syorder.hu
+                  </a>
                 </div>
               )}
             </div>

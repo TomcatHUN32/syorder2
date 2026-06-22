@@ -737,9 +737,17 @@ export default function SettingsPage() {
               <Separator />
 
               <div className="grid md:grid-cols-2 gap-3 text-sm">
-                {['Korlátlan rendelés', 'Menükezelés', 'Készletkezelés', 'Hűségprogram', 'Analitika', 'Prioritásos support'].map((f) => (
-                  <div key={f} className="flex items-center gap-2 text-muted-foreground">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{f}
+                {[
+                  { name: 'Korlátlan rendelés', included: true },
+                  { name: 'Menükezelés', included: true },
+                  { name: 'Készletkezelés', included: tenant?.subscription_plan === 'professzionalis' || tenant?.subscription_plan === 'pro' },
+                  { name: 'Hűségprogram', included: tenant?.subscription_plan === 'professzionalis' || tenant?.subscription_plan === 'pro' },
+                  { name: (tenant?.subscription_plan === 'professzionalis' || tenant?.subscription_plan === 'pro') ? 'Részletes analitika' : 'Alap analitika', included: true },
+                  { name: (tenant?.subscription_plan === 'professzionalis' || tenant?.subscription_plan === 'pro') ? 'Prioritásos support' : 'E-mail support', included: true }
+                ].map((item) => (
+                  <div key={item.name} className={cn("flex items-center gap-2", item.included ? "text-muted-foreground" : "text-muted-foreground/60")}>
+                    <div className={cn("w-1.5 h-1.5 rounded-full", item.included ? "bg-emerald-500" : "bg-rose-500")} />
+                    <span>{item.name}</span>
                   </div>
                 ))}
               </div>

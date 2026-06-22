@@ -56,6 +56,36 @@ export async function POST(request: NextRequest) {
     const posEmail = customEmail || `${subdomain}@pos2.syorder.hu`;
     const posPassword = customPassword || generatePassword(12);
 
+    // Robust cleanup of existing colliding tenant and auth user to allow seamless re-approvals
+    try {
+      const { data: existingTenants } = await adminClient
+        .from('tenants')
+        .select('id')
+        .eq('slug', subdomain);
+
+      if (existingTenants && existingTenants.length > 0) {
+        for (const t of existingTenants) {
+          // Delete subscriptions first
+          await adminClient.from('subscriptions').delete().eq('tenant_id', t.id);
+          // Delete users belonging to this tenant
+          await adminClient.from('users').delete().eq('tenant_id', t.id);
+          // Delete the tenant
+          await adminClient.from('tenants').delete().eq('id', t.id);
+        }
+      }
+
+      const { data: usersList, error: listErr } = await adminClient.auth.admin.listUsers();
+      if (!listErr && usersList?.users) {
+        const existingUser = usersList.users.find(u => u.email?.toLowerCase() === posEmail.toLowerCase());
+        if (existingUser) {
+          await adminClient.from('users').delete().eq('id', existingUser.id);
+          await adminClient.auth.admin.deleteUser(existingUser.id);
+        }
+      }
+    } catch (cleanupErr) {
+      console.error('Hiba az előzetes takarítás során:', cleanupErr);
+    }
+
     // 1. Create tenant
     const { data: tenant, error: tenantErr } = await adminClient
       .from('tenants')
