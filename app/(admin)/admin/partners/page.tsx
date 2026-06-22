@@ -63,22 +63,45 @@ export default function AdminPartnersPage() {
   const loadPartners = useCallback(async () => {
     setLoading(true);
     
-    const [tenantsRes, ordersRes] = await Promise.all([
-      supabase.from('tenants').select('*, subscriptions(*)').order('created_at', { ascending: false }),
-      supabase.from('orders').select('tenant_id, total')
+    // Fetch tenants, subscriptions, and our custom server-side authenticated revenue map in parallel
+    const [tenantsRes, subsRes] = await Promise.all([
+      supabase.from('tenants').select('*').order('created_at', { ascending: false }),
+      supabase.from('subscriptions').select('*')
     ]);
+
+    let revenuesMap: Record<string, number> = {};
+    try {
+      const revRes = await fetch('/api/admin/partners-revenue');
+      if (revRes.ok) {
+        const revData = await revRes.json();
+        revenuesMap = revData.revenues || {};
+      }
+    } catch (err) {
+      console.error('Hiba a bevételek szerver-oldali lekérdezésekor:', err);
+    }
 
     if (tenantsRes.error) {
       toast.error('Hiba történt a partnerek lekérdezésekor: ' + tenantsRes.error.message);
     } else {
-      setPartners(tenantsRes.data || []);
-      
-      const revMap: Record<string, number> = {};
-      (ordersRes.data || []).forEach((order) => {
-        const tid = order.tenant_id;
-        revMap[tid] = (revMap[tid] || 0) + Number(order.total || 0);
+      const tenantsRaw = tenantsRes.data || [];
+      const subsRaw = subsRes.data || [];
+
+      // Merge subscriptions on the client side
+      const subsMap: Record<string, Subscription[]> = {};
+      subsRaw.forEach((sub) => {
+        if (!subsMap[sub.tenant_id]) {
+          subsMap[sub.tenant_id] = [];
+        }
+        subsMap[sub.tenant_id].push(sub);
       });
-      setPartnerRevenues(revMap);
+
+      const mergedPartners: TenantWithSub[] = tenantsRaw.map((tenant) => ({
+        ...tenant,
+        subscriptions: subsMap[tenant.id] || [],
+      }));
+
+      setPartners(mergedPartners);
+      setPartnerRevenues(revenuesMap);
     }
     setLoading(false);
   }, []);
@@ -101,37 +124,60 @@ export default function AdminPartnersPage() {
   async function handleToggleActive() {
     if (!toggleTarget) return;
     setSaving(true);
-    const { error } = await supabase
-      .from('tenants')
-      .update({ is_active: !toggleTarget.is_active, updated_at: new Date().toISOString() })
-      .eq('id', toggleTarget.id);
+    try {
+      const res = await fetch('/api/admin/toggle-partner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: toggleTarget.id,
+          is_active: !toggleTarget.is_active,
+        }),
+      });
 
-    if (error) {
-      toast.error('Hiba történt a státusz változtatásakor');
-    } else {
-      toast.success(
-        toggleTarget.is_active
-          ? `${toggleTarget.name} deaktiválva`
-          : `${toggleTarget.name} aktiválva`
-      );
-      setToggleTarget(null);
-      loadPartners();
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error('Hiba történt a státusz változtatásakor: ' + (data.error || 'Ismeretlen hiba'));
+      } else {
+        toast.success(
+          toggleTarget.is_active
+            ? `${toggleTarget.name} deaktiválva`
+            : `${toggleTarget.name} aktiválva`
+        );
+        setToggleTarget(null);
+        loadPartners();
+      }
+    } catch (err: any) {
+      toast.error('Hiba történt a hálózati kapcsolatban: ' + err.message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   async function handleDelete() {
     if (!deleteTarget) return;
     setSaving(true);
-    const { error } = await supabase.from('tenants').delete().eq('id', deleteTarget.id);
-    if (error) {
-      toast.error('Hiba történt a törlés során: ' + error.message);
-    } else {
-      toast.success(`${deleteTarget.name} törölve`);
-      setDeleteTarget(null);
-      loadPartners();
+    try {
+      const res = await fetch('/api/admin/delete-partner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deleteTarget.id }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error('Hiba történt a törlés során: ' + (data.error || 'Ismeretlen hiba'));
+      } else {
+        toast.success(`${deleteTarget.name} törölve`);
+        setDeleteTarget(null);
+        loadPartners();
+      }
+    } catch (err: any) {
+      toast.error('Hiba történt a hálózati kapcsolatban: ' + err.message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   function openExtendSubscription(partner: TenantWithSub) {
@@ -159,38 +205,33 @@ export default function AdminPartnersPage() {
       newExpire.setMonth(newExpire.getMonth() + 1);
     }
 
-    const { error: subErr } = await supabase
-      .from('subscriptions')
-      .upsert({
-        tenant_id: extendTarget.id,
-        plan_name: selectedPlanValue,
-        status: 'active',
-        billing_period: extendPeriod,
-        starts_at: sub?.starts_at || new Date().toISOString(),
-        expires_at: newExpire.toISOString(),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'tenant_id' });
+    try {
+      const res = await fetch('/api/admin/extend-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: extendTarget.id,
+          plan_name: selectedPlanValue,
+          billing_period: extendPeriod,
+          starts_at: sub?.starts_at || new Date().toISOString(),
+          expires_at: newExpire.toISOString(),
+        }),
+      });
 
-    if (subErr) {
-      toast.error('Hiba történt a hosszabbítás során: ' + subErr.message);
-    } else {
-      const { error: tenantErr } = await supabase
-        .from('tenants')
-        .update({
-          subscription_plan: selectedPlanValue === 'Professzionális' ? 'pro' : 'basic',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', extendTarget.id);
+      const data = await res.json();
 
-      if (tenantErr) {
-        console.error('Tenant update error:', tenantErr);
+      if (!res.ok) {
+        toast.error('Hiba történt a hosszabbítás során: ' + (data.error || 'Ismeretlen hiba'));
+      } else {
+        toast.success(`${extendTarget.name} előfizetése sikeresen meghosszabbítva!`);
+        setExtendTarget(null);
+        loadPartners();
       }
-
-      toast.success(`${extendTarget.name} előfizetése sikeresen meghosszabbítva!`);
-      setExtendTarget(null);
-      loadPartners();
+    } catch (err: any) {
+      toast.error('Hiba történt a hálózati kapcsolatban: ' + err.message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   const planLabels: Record<string, { label: string; color: string }> = {

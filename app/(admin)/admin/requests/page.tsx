@@ -219,37 +219,56 @@ export default function AdminRequestsPage() {
   async function handleReject() {
     if (!selected) return;
     setSaving(true);
-    const { error } = await supabase
-      .from('restaurant_requests')
-      .update({ status: 'rejected', notes: rejectNotes || null, updated_at: new Date().toISOString() })
-      .eq('id', selected.id);
+    try {
+      const res = await fetch('/api/admin/reject-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selected.id,
+          notes: rejectNotes || '',
+        }),
+      });
 
-    if (error) {
-      toast.error('Hiba történt az elutasítás során');
-    } else {
-      toast.success(`${selected.business_name} elutasítva`);
-      setRejectDialogOpen(false);
-      loadRequests();
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error('Hiba történt az elutasítás során: ' + (data.error || 'Ismeretlen hiba'));
+      } else {
+        toast.success(`${selected.business_name} elutasítva`);
+        setRejectDialogOpen(false);
+        loadRequests();
+      }
+    } catch (err: any) {
+      toast.error('Hiba történt a hálózati kapcsolatban: ' + err.message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   async function handleDeleteRequest() {
     if (!deleteRequestTarget) return;
     setSaving(true);
-    const { error } = await supabase
-      .from('restaurant_requests')
-      .delete()
-      .eq('id', deleteRequestTarget.id);
+    try {
+      const res = await fetch('/api/admin/delete-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deleteRequestTarget.id }),
+      });
 
-    if (error) {
-      toast.error('Hiba történt a törlés során: ' + error.message);
-    } else {
-      toast.success(`${deleteRequestTarget.business_name} sikeresen törölve`);
-      setDeleteRequestTarget(null);
-      loadRequests();
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error('Hiba történt a törlés során: ' + (data.error || 'Ismeretlen hiba'));
+      } else {
+        toast.success(`${deleteRequestTarget.business_name} sikeresen törölve`);
+        setDeleteRequestTarget(null);
+        loadRequests();
+      }
+    } catch (err: any) {
+      toast.error('Hiba történt a hálózati kapcsolatban: ' + err.message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   return (
@@ -266,7 +285,7 @@ export default function AdminRequestsPage() {
             <p className="font-bold text-amber-900">Figyelem: Hiányzó adminisztrátori jogosultság (SUPABASE_SERVICE_ROLE_KEY)!</p>
             <p className="text-amber-700 leading-relaxed">
               A <code className="bg-amber-100 font-mono text-xs px-1 rounded text-red-700">SUPABASE_SERVICE_ROLE_KEY</code> nincs beállítva. 
-              Emiatt a <strong>"Jóváhagyás"</strong> gombra kattintva a tagok regisztrációja és jelszó generálása sikertelen lesz.
+              Emiatt a <strong>&quot;Jóváhagyás&quot;</strong> gombra kattintva a tagok regisztrációja és jelszó generálása sikertelen lesz.
             </p>
             <p className="text-amber-800 font-semibold mt-1">
               Megoldás: Lépj az AI Studio-ban a <strong>Settings (Fogaskerék) → Secrets</strong> menühöz, és add hozzá: <span className="font-mono bg-white border border-amber-300 px-1.5 py-0.5 rounded text-[11px] select-all">SUPABASE_SERVICE_ROLE_KEY</span> változót (és illeszd be a Supabase Service Role kulcsodat).
