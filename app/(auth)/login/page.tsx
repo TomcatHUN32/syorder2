@@ -40,7 +40,8 @@ export default function LoginPage() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      toast.error('Hibás email cím vagy jelszó');
+      console.error('Bejelentkezési hiba részletei:', error);
+      toast.error(`Sikertelen bejelentkezés: ${error.message || 'Hibás email cím vagy jelszó'}`);
       setLoading(false);
       return;
     }

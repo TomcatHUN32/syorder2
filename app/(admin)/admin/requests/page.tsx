@@ -43,6 +43,7 @@ import {
   Check,
   KeyRound,
   Monitor,
+  Trash2,
 } from 'lucide-react';
 import { supabase, RestaurantRequest } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -102,6 +103,7 @@ export default function AdminRequestsPage() {
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [customEmail, setCustomEmail] = useState('');
   const [customPassword, setCustomPassword] = useState('');
+  const [deleteRequestTarget, setDeleteRequestTarget] = useState<RestaurantRequest | null>(null);
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -223,6 +225,24 @@ export default function AdminRequestsPage() {
     setSaving(false);
   }
 
+  async function handleDeleteRequest() {
+    if (!deleteRequestTarget) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from('restaurant_requests')
+      .delete()
+      .eq('id', deleteRequestTarget.id);
+
+    if (error) {
+      toast.error('Hiba történt a törlés során: ' + error.message);
+    } else {
+      toast.success(`${deleteRequestTarget.business_name} sikeresen törölve`);
+      setDeleteRequestTarget(null);
+      loadRequests();
+    }
+    setSaving(false);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -317,6 +337,15 @@ export default function AdminRequestsPage() {
                       >
                         <Eye className="h-3.5 w-3.5" />
                         Részletek
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeleteRequestTarget(req)}
+                        className="gap-1 text-rose-600 border-rose-200 hover:bg-rose-50 px-2"
+                        title="Igénylés törlése"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                       {req.status === 'pending' && (
                         <>
@@ -594,6 +623,25 @@ export default function AdminRequestsPage() {
           <DialogFooter>
             <Button onClick={() => setCredentialsOpen(false)} className="w-full">
               Megértettem, bezárás
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteRequestTarget} onOpenChange={(o) => !o && setDeleteRequestTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-700">Igénylés Törlése</DialogTitle>
+            <DialogDescription>
+              Biztosan véglegesen törlöd a(z) <strong>{deleteRequestTarget?.business_name}</strong> igénylését?
+              <span className="block mt-2 font-medium text-red-600">Ez a művelet visszavonhatatlan és az igénylés törlődik a rendszerből!</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteRequestTarget(null)}>Mégse</Button>
+            <Button variant="destructive" onClick={handleDeleteRequest} disabled={saving}>
+              {saving ? 'Törlés...' : 'Végleges Törlés'}
             </Button>
           </DialogFooter>
         </DialogContent>

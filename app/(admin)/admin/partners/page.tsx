@@ -18,6 +18,14 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Building2,
   Search,
@@ -31,24 +39,38 @@ import {
   Calendar,
   Trash2,
 } from 'lucide-react';
-import { supabase, Tenant } from '@/lib/supabase/client';
+import { supabase, Tenant, Subscription } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
+interface TenantWithSub extends Tenant {
+  subscriptions?: Subscription[];
+}
+
 export default function AdminPartnersPage() {
-  const [partners, setPartners] = useState<Tenant[]>([]);
+  const [partners, setPartners] = useState<TenantWithSub[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [toggleTarget, setToggleTarget] = useState<Tenant | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Tenant | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // New subscription extension state
+  const [extendTarget, setExtendTarget] = useState<TenantWithSub | null>(null);
+  const [extendPeriod, setExtendPeriod] = useState<'havi' | 'negyedeves' | 'eves'>('havi');
+  const [selectedPlanValue, setSelectedPlanValue] = useState<string>('Induló');
+
   const loadPartners = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('tenants')
-      .select('*')
+      .select('*, subscriptions(*)')
       .order('created_at', { ascending: false });
-    setPartners(data || []);
+
+    if (error) {
+      toast.error('Hiba törént a partnerek lekérdezésekor: ' + error.message);
+    } else {
+      setPartners(data || []);
+    }
     setLoading(false);
   }, []);
 
@@ -98,6 +120,65 @@ export default function AdminPartnersPage() {
     } else {
       toast.success(`${deleteTarget.name} törölve`);
       setDeleteTarget(null);
+      loadPartners();
+    }
+    setSaving(false);
+  }
+
+  function openExtendSubscription(partner: TenantWithSub) {
+    setExtendTarget(partner);
+    const sub = partner.subscriptions?.[0];
+    setExtendPeriod((sub?.billing_period as any) || 'havi');
+    setSelectedPlanValue(sub?.plan_name || 'Induló');
+  }
+
+  async function handleExtendSubscription() {
+    if (!extendTarget) return;
+    setSaving(true);
+
+    const sub = extendTarget.subscriptions?.[0];
+    const currentExpire = sub?.expires_at ? new Date(sub.expires_at) : new Date();
+    const baseDate = currentExpire > new Date() ? currentExpire : new Date();
+
+    let newExpire = new Date(baseDate);
+    if (extendPeriod === 'eves') {
+      newExpire.setFullYear(newExpire.getFullYear() + 1);
+    } else if (extendPeriod === 'negyedeves') {
+      newExpire.setMonth(newExpire.getMonth() + 3);
+    } else {
+      // havi
+      newExpire.setMonth(newExpire.getMonth() + 1);
+    }
+
+    const { error: subErr } = await supabase
+      .from('subscriptions')
+      .upsert({
+        tenant_id: extendTarget.id,
+        plan_name: selectedPlanValue,
+        status: 'active',
+        billing_period: extendPeriod,
+        starts_at: sub?.starts_at || new Date().toISOString(),
+        expires_at: newExpire.toISOString(),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'tenant_id' });
+
+    if (subErr) {
+      toast.error('Hiba történt a hosszabbítás során: ' + subErr.message);
+    } else {
+      const { error: tenantErr } = await supabase
+        .from('tenants')
+        .update({
+          subscription_plan: selectedPlanValue === 'Professzionális' ? 'pro' : 'basic',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', extendTarget.id);
+
+      if (tenantErr) {
+        console.error('Tenant update error:', tenantErr);
+      }
+
+      toast.success(`${extendTarget.name} előfizetése sikeresen meghosszabbítva!`);
+      setExtendTarget(null);
       loadPartners();
     }
     setSaving(false);
@@ -155,12 +236,19 @@ export default function AdminPartnersPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((partner) => {
-            const plan = planLabels[partner.subscription_plan] || { label: partner.subscription_plan, color: 'bg-slate-100 text-slate-700' };
+            const sub = partner.subscriptions?.[0];
+            const planDisplay = sub 
+              ? { 
+                  label: `${sub.plan_name} (${sub.billing_period === 'havi' ? 'Havi' : sub.billing_period === 'negyedeves' ? 'Negyedéves' : sub.billing_period === 'eves' ? 'Éves' : sub.billing_period || 'Egyedi'})`, 
+                  color: sub.plan_name?.includes('Professzionális') || sub.plan_name?.toLowerCase().includes('pro') ? 'bg-blue-100 text-blue-700' : 'bg-indigo-100 text-indigo-700'
+                }
+              : { label: 'Trial / Rég hűség', color: 'bg-amber-100 text-amber-800' };
+
             return (
               <Card
                 key={partner.id}
                 className={`relative overflow-hidden transition-shadow hover:shadow-md ${
-                  !partner.is_active ? 'opacity-60' : ''
+                  !partner.is_active ? 'opacity-65' : ''
                 }`}
               >
                 <div
@@ -190,11 +278,11 @@ export default function AdminPartnersPage() {
                         <p className="text-xs text-slate-400 font-mono">{partner.slug}.syorder.hu</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${plan.color}`}>
-                        {plan.label}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${planDisplay.color}`}>
+                        {planDisplay.label}
                       </span>
-                      <Badge variant={partner.is_active ? 'default' : 'secondary'} className="text-xs">
+                      <Badge variant={partner.is_active ? 'default' : 'secondary'} className="text-[10px] py-0 px-1.5 h-4">
                         {partner.is_active ? 'Aktív' : 'Inaktív'}
                       </Badge>
                     </div>
@@ -224,48 +312,85 @@ export default function AdminPartnersPage() {
                       <Calendar className="h-3.5 w-3.5 shrink-0" />
                       <span>Csatlakozott: {new Date(partner.created_at).toLocaleDateString('hu-HU')}</span>
                     </div>
+
+                    {/* Subscription info instead of trial keyword */}
+                    {sub ? (
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-400">Aktuális csomag:</span>
+                          <span className="font-semibold text-slate-700">{sub.plan_name}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-400">Számlázási ütem:</span>
+                          <span className="font-medium text-slate-700">{sub.billing_period === 'havi' ? 'Havi' : sub.billing_period === 'negyedeves' ? 'Negyedéves' : sub.billing_period === 'eves' ? 'Éves' : sub.billing_period}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-400">Lejárat dátuma:</span>
+                          <span className={`font-semibold ${new Date(sub.expires_at || '') < new Date() ? 'text-rose-600 font-bold' : 'text-emerald-600'}`}>
+                            {sub.expires_at ? new Date(sub.expires_at).toLocaleDateString('hu-HU') : 'Nincs megadva'}
+                            {new Date(sub.expires_at || '') < new Date() && ' (Lejárt)'}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 text-xs text-amber-600 font-semibold bg-amber-50/50 p-1.5 rounded border border-amber-100/30">
+                        Nincs aktív előfizetési adat (Trial)
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
-                      className="gap-1 flex-1"
-                    >
-                      <a href={`/menu/${partner.slug}`} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        Menü
-                      </a>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setToggleTarget(partner)}
-                      className={`gap-1 flex-1 ${
-                        partner.is_active
-                          ? 'text-red-600 border-red-200 hover:bg-red-50'
-                          : 'text-emerald-600 border-emerald-200 hover:bg-emerald-50'
-                      }`}
-                    >
-                      {partner.is_active ? (
-                        <><PowerOff className="h-3.5 w-3.5" /> Deaktivál</>
-                      ) : (
-                        <><Power className="h-3.5 w-3.5" /> Aktivál</>
-                      )}
-                    </Button>
-                    {!partner.is_active && (
+                  <div className="space-y-2 mt-4 pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="gap-1 flex-1 text-xs"
+                      >
+                        <a href={`/menu/${partner.slug}`} target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-3 w-3" />
+                          Menü
+                        </a>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openExtendSubscription(partner)}
+                        className="gap-1 flex-1 text-slate-700 bg-slate-50 hover:bg-slate-100 hover:text-slate-900 border-slate-200 text-xs"
+                      >
+                        <Calendar className="h-3 w-3 text-blue-500" />
+                        Hosszabbítás
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setToggleTarget(partner)}
+                        className={`gap-1 flex-1 text-xs ${
+                          partner.is_active
+                            ? 'text-rose-600 border-rose-200 hover:bg-rose-50'
+                            : 'text-emerald-600 border-emerald-200 hover:bg-emerald-50'
+                        }`}
+                      >
+                        {partner.is_active ? (
+                          <><PowerOff className="h-3 w-3" /> Deaktivál</>
+                        ) : (
+                          <><Power className="h-3 w-3" /> Aktivál</>
+                        )}
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setDeleteTarget(partner)}
-                        className="gap-1 text-red-700 border-red-300 hover:bg-red-50"
-                        title="Partner törlése"
+                        className="gap-1 text-rose-700 border-rose-300 hover:bg-rose-50 px-2 shrink-0"
+                        title="Végleges Törlés"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
-                    )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -319,6 +444,66 @@ export default function AdminPartnersPage() {
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>Mégse</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={saving}>
               {saving ? 'Törlés...' : 'Végleges Törlés'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Extend subscription dialog */}
+      <Dialog open={!!extendTarget} onOpenChange={(o) => !o && setExtendTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Előfizetés / Hűség hosszabbítása</DialogTitle>
+            <DialogDescription>
+              Manuális előfizetés-hosszabbítás a(z) <strong className="text-slate-800">{extendTarget?.name}</strong> részére.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="plan" className="font-semibold text-slate-800">Előfizetési Csomag</Label>
+              <Select value={selectedPlanValue} onValueChange={setSelectedPlanValue}>
+                <SelectTrigger id="plan" className="w-full">
+                  <SelectValue placeholder="Válassz csomagot" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Induló">Induló</SelectItem>
+                  <SelectItem value="Professzionális">Professzionális</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="period" className="font-semibold text-slate-800">Hosszabbítás időtartama</Label>
+              <Select value={extendPeriod} onValueChange={(v: any) => setExtendPeriod(v)}>
+                <SelectTrigger id="period" className="w-full">
+                  <SelectValue placeholder="Válassz időszakot" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="havi">Havi (+30 nap)</SelectItem>
+                  <SelectItem value="negyedeves">Negyedéves (+90 nap)</SelectItem>
+                  <SelectItem value="eves">Éves (+365 nap)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {extendTarget?.subscriptions?.[0] && (
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs space-y-1">
+                <p className="text-slate-500 font-medium">Jelenlegi lejárat:</p>
+                <p className="font-mono text-slate-800 font-semibold">
+                  {extendTarget.subscriptions[0].expires_at 
+                    ? new Date(extendTarget.subscriptions[0].expires_at).toLocaleDateString('hu-HU') 
+                    : 'Nincs lejárat'}
+                </p>
+                <p className="text-slate-400 mt-1">Az új lejárati dátum a jelenlegiből számolódik tovább, amennyiben az a jövőben van, különben a mai naptól indul.</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtendTarget(null)}>Mégse</Button>
+            <Button onClick={handleExtendSubscription} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
+              {saving ? 'Mentés...' : 'Hosszabbítás Mentése'}
             </Button>
           </DialogFooter>
         </DialogContent>
